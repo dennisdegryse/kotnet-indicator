@@ -1,0 +1,54 @@
+#!/usr/bin/perl -w
+use strict;
+use WWW::Mechanize;
+
+if (@ARGV != 2)
+{
+    print "ERR 0 Incomplete configuration";
+    exit 0;
+}
+
+my $username = $ARGV[0];
+my $password = $ARGV[1];
+
+my $client = WWW::Mechanize->new(agent => "gnome-shell-extension-kotnet 0.1");
+my $result = '';
+
+while (1)
+{
+    # Try login
+    $client->get("https://netlogin.kuleuven.be/cgi-bin/wayf.pl?inst=kuleuven&lang=en&submit=Ga+verder+%2F+Continue") or die;
+    $client->form_name ("netlogin");
+    $client->set_visible($username, $password) or die;
+    $client->submit() or die;
+
+    # Check result code
+    $client->content =~ m/<rc=(\d*?) (.*?)( <.*)?>/i;
+
+    last if ($1 == 100);
+
+    if ($1 != 206) {
+        print ("ERR $1 $2");
+        exit 0;
+    }
+
+    # Logout stale session
+	$client->content =~ m/<INPUT type=hidden name="ip" value="([0-9\.]*)">/;
+
+	$client->get("https://netlogin.kuleuven.be/cgi-bin/wayf.pl?inout=logout&ip=$1&uid=kuleuven/$username&lang=en") or die;
+	$client->form_name ("netlogout");
+	$client->set_visible($password) or die;
+	$client->submit();
+}
+
+if ($client->content =~ m/<h2>campusnet<\/h2>/i)
+{
+	print "OK -1 -1";
+    exit 0;
+} 
+
+# Print quota
+$client->content(format => 'text') =~ m/(\d+) MBytes.*?(\d+) MBytes/;
+print "OK $1 $2";
+
+

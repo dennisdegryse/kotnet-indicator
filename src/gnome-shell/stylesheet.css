@@ -1,0 +1,19 @@
+.kotnet-entry {
+    color: black;
+    background: white;
+    border-radius: 4px;
+    width: 8em;
+    padding: 2px;
+    border: 0px;
+    selected-background: black;
+    selected-color: white;
+}
+
+.helloworld-label {
+    font-size: 36px;
+    font-weight: bold;
+    color: #ffffff;
+    background-color: rgba(10,10,10,0.7);
+    border-radius: 5px;
+    padding: .5em;
+}
