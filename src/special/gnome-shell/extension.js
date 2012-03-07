@@ -27,8 +27,8 @@ Indicator.prototype = {
         this._conf = conf;
         this._conf.loadInto(this);
 
-        this._task = null;
         this._extensionMeta = extensionMeta;
+        this._quotaFile = this._extensionMeta.path + '/data/quota';
         this._icon = new St.Icon({ style_class: 'system-status-icon' });
         this._status = null;
 
@@ -63,7 +63,6 @@ Indicator.prototype = {
         this._uid.clutter_text.connect('text-changed', Lang.bind(this, function () {
             this._credentialsUid = this._uid.text;
             this._conf.saveFrom(this);
-            this._scheduleInspectQuota(3);
         }));
         item.addActor(this._uid, { align: St.Align.END });
         credentials.menu.addMenuItem(item);
@@ -77,7 +76,6 @@ Indicator.prototype = {
         this._pwd.clutter_text.connect('text-changed', Lang.bind(this, function () {
             this._credentialsPwd = this._pwd.text;
             this._conf.saveFrom(this);
-            this._scheduleInspectQuota(3);
         }));
         item.addActor(this._pwd, { align: St.Align.END });
         credentials.menu.addMenuItem(item);
@@ -88,7 +86,7 @@ Indicator.prototype = {
         this.actor.add_actor(this._icon);
 
         this._setStatus(false);
-        this._scheduleInspectQuota(2);
+        this._startDaemon();
     },
 
     _setStatus: function(connected) {
@@ -122,34 +120,68 @@ Indicator.prototype = {
         this._setStatus(false);
     },
 
-    _scheduleInspectQuota: function(delay) {
-        if (this._task != null)
-            Mainloop.source_remove(this._task);
+    _startDaemon: function() {
+        GLib.timeout_add_seconds(0, 2, Lang.bind(this, function() {
+            let command = [this._extensionMeta.path + '/bin/inspectquota', this._credentialsUid, this._credentialsPwd, this._quotaFile];
 
-        this._task = Mainloop.timeout_add(1000 * delay, Lang.bind(this, this._inspectQuota));
+            global.log('Starting daemon...');
+
+            if (this._credentialsUid == '' || this._credentialsPwd == '') {
+                this._setDisconnected('incomplete configuraton');
+                // reschedule for a retry
+                return true;
+            }
+
+            try {
+                if (GLib.file_test(this._quotaFile, 1<<4))
+                    GLib.unlink(this._extensionMeta.path + '/data/quota');
+
+                GLib.spawn_async(null, command, null, 0, null);
+            } catch (e) {
+                global.log(e.toString());
+            }
+
+            this._readQuota();
+
+            // daemon started
+            return false;
+        }));
     },
 
-    _inspectQuota: function() {
-        if (this._credentialsUid == '' || this._credentialsPwd == '') {
-            this._setDisconnected('incomplete configuraton');
-            return;
-        }
+    _readQuota: function() {
+        global.log('Starting quota reader...');
 
-        let command = [this._extensionMeta.path + '/bin/inspectquota', this._credentialsUid, this._credentialsPwd];
-        let response = GLib.spawn_sync(null, command, null, 0, null)[1].toString().split(' ');
+        GLib.timeout_add_seconds(0, 10, Lang.bind(this, function() {
+            let response = "UNKNOWN";
+        
+            if (GLib.file_test(this._quotaFile, 1<<4))
+                response = GLib.file_get_contents(this._quotaFile)[1].toString();
+            
+            response = response.split(' ');
 
-        if (response[0] == 'OK')
-            this._setConnected(response[1], response[2]);
-        else {
-            let message = [];
+            switch (response[0]) {
+            case 'OK':
+                this._setConnected(response[1], response[2]);
+                break;
 
-            for (let i = 2; i < response.length; i++)
-                message.push(response[i]);
+            case 'ERR':
+                let message = [];
 
-            this._setDisconnected(message.join(' '));
-        }
+                for (let i = 2; i < response.length; i++)
+                    message.push(response[i]);
 
-        this._scheduleInspectQuota(300);
+                this._setDisconnected(message.join(' '));
+                this._startDaemon();
+                return false;
+
+            case 'UNKOWN':
+                this._setDisconnected("Loading...");
+                break;
+            }
+
+            // reschedule for next read
+            return true;
+        }));
     }
 };
 
