@@ -46,8 +46,10 @@ Conf.prototype = {
     },
 
     loadInto: function(object) {
-        for (let i = 0; i < this._options.length; i++)
+        for (let i = 0; i < this._options.length; i++) {
             this[this._options[i][0]] = this._options[i][3];
+            object[this._options[i][0]] = this[this._options[i][0]];
+        }
 
         let configDirs = [GLib.get_system_config_dirs(), GLib.get_user_config_dir()];
 
