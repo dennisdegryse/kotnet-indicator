@@ -17,6 +17,6 @@ clean:
 	@@[ -d $(BUILD_DIR) ] && rm -Rf $(BUILD_DIR)/* || mkdir -p $(BUILD_DIR)
 
 install:
-	@@[ -d $(INSTALL_DIR) ] && rm -Rf $(INSTALL_DIR);
+	@@[ -d $(INSTALL_DIR) ] && rm -Rf $(INSTALL_DIR) || true;
 	@@cp -R $(BUILD_DIR) $(INSTALL_DIR);
 	@@echo "Successfully installed. Please hit Alt+F2 and run 'r' to restart Gnome Shell."
